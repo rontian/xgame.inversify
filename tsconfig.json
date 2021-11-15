@@ -1,0 +1,22 @@
+{
+	"compilerOptions": {
+		"target": "es5",
+		"lib": [
+			"es6",
+			"dom"
+		],
+		"noImplicitAny": false,
+		"sourceMap": false,
+		"declaration": true,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"outFile": "./xgame.ioc.js"
+	},
+	"include": [
+		"src",
+		"libs"
+	],
+	"exclude": [
+		"node_modules"
+	]
+}
