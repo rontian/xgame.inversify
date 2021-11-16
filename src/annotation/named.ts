@@ -1,19 +1,19 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+namespace inversify {
+
     // Used to add named metadata which is used to resolve name-based contextual bindings.
-    export function named(name: string) {
+    export function named(name: string | number | symbol) {
         return function (target: any, targetKey: string, index?: number) {
-            let metadata = new Metadata(NAMED_TAG, name);
+            const metadata = new Metadata(NAMED_TAG, name);
             if (typeof index === "number") {
-                return tagParameter(target, targetKey, index, metadata);
+                tagParameter(target, targetKey, index, metadata);
             } else {
-                return tagProperty(target, targetKey, metadata);
+                tagProperty(target, targetKey, metadata);
             }
         };
     }
-
 }

@@ -1,24 +1,31 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+namespace inversify {
 
     export class Context implements interfaces.Context {
 
-        public guid: string;
-        public kernel: interfaces.Kernel;
+        public id: number;
+        public container: interfaces.Container;
         public plan: interfaces.Plan;
+        public currentRequest: interfaces.Request;
 
-        public constructor(kernel: interfaces.Kernel) {
-            this.guid = guid();
-            this.kernel = kernel;
+        public constructor(
+            container: interfaces.Container) {
+            this.id = id();
+            this.container = container;
         }
 
         public addPlan(plan: interfaces.Plan) {
             this.plan = plan;
         }
+
+        public setCurrentRequest(currentRequest: interfaces.Request) {
+            this.currentRequest = currentRequest;
+        }
+
     }
 
 }

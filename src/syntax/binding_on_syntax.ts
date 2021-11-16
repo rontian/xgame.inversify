@@ -1,10 +1,9 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
-
+namespace inversify {
     export class BindingOnSyntax<T> implements interfaces.BindingOnSyntax<T> {
 
         private _binding: interfaces.Binding<T>;
@@ -19,5 +18,4 @@ namespace ioc {
         }
 
     }
-
 }

@@ -1,9 +1,9 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+namespace inversify {
     export class Plan implements interfaces.Plan {
 
         public parentContext: interfaces.Context;

@@ -1,9 +1,9 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+namespace inversify {
     export class BindingToSyntax<T> implements interfaces.BindingToSyntax<T> {
 
         private _binding: interfaces.Binding<T>;
@@ -12,26 +12,31 @@ namespace ioc {
             this._binding = binding;
         }
 
-        public to(constructor: { new(...args: any[]): T; }): interfaces.BindingInWhenOnSyntax<T> {
-            this._binding.type = BindingType.Instance;
+        public to(constructor: new (...args: any[]) => T): interfaces.BindingInWhenOnSyntax<T> {
+            this._binding.type = BindingTypeEnum.Instance;
             this._binding.implementationType = constructor;
             return new BindingInWhenOnSyntax<T>(this._binding);
         }
 
         public toSelf(): interfaces.BindingInWhenOnSyntax<T> {
-            return this.to(<any>this._binding.serviceIdentifier);
+            if (typeof this._binding.serviceIdentifier !== "function") {
+                throw new Error(`${INVALID_TO_SELF_VALUE}`);
+            }
+            const self: any = this._binding.serviceIdentifier;
+            return this.to(self);
         }
 
         public toConstantValue(value: T): interfaces.BindingWhenOnSyntax<T> {
-            this._binding.type = BindingType.ConstantValue;
+            this._binding.type = BindingTypeEnum.ConstantValue;
             this._binding.cache = value;
             this._binding.dynamicValue = null;
             this._binding.implementationType = null;
+            this._binding.scope = BindingScopeEnum.Singleton;
             return new BindingWhenOnSyntax<T>(this._binding);
         }
 
         public toDynamicValue(func: (context: interfaces.Context) => T): interfaces.BindingInWhenOnSyntax<T> {
-            this._binding.type = BindingType.DynamicValue;
+            this._binding.type = BindingTypeEnum.DynamicValue;
             this._binding.cache = null;
             this._binding.dynamicValue = func;
             this._binding.implementationType = null;
@@ -39,39 +44,49 @@ namespace ioc {
         }
 
         public toConstructor<T2>(constructor: interfaces.Newable<T2>): interfaces.BindingWhenOnSyntax<T> {
-            this._binding.type = BindingType.Constructor;
-            this._binding.implementationType = <any>constructor;
+            this._binding.type = BindingTypeEnum.Constructor;
+            this._binding.implementationType = constructor as any;
+            this._binding.scope = BindingScopeEnum.Singleton;
             return new BindingWhenOnSyntax<T>(this._binding);
         }
 
         public toFactory<T2>(factory: interfaces.FactoryCreator<T2>): interfaces.BindingWhenOnSyntax<T> {
-            this._binding.type = BindingType.Factory;
-            this._binding.factory = <any>factory;
+            this._binding.type = BindingTypeEnum.Factory;
+            this._binding.factory = factory;
+            this._binding.scope = BindingScopeEnum.Singleton;
             return new BindingWhenOnSyntax<T>(this._binding);
         }
 
         public toFunction(func: T): interfaces.BindingWhenOnSyntax<T> {
             // toFunction is an alias of toConstantValue
-            if (typeof func !== "function") { throw new Error(INVALID_FUNCTION_BINDING); };
-            let bindingWhenOnSyntax = this.toConstantValue(func);
-            this._binding.type = BindingType.Function;
+            if (typeof func !== "function") { throw new Error(INVALID_FUNCTION_BINDING); }
+            const bindingWhenOnSyntax = this.toConstantValue(func);
+            this._binding.type = BindingTypeEnum.Function;
+            this._binding.scope = BindingScopeEnum.Singleton;
             return bindingWhenOnSyntax;
         }
 
         public toAutoFactory<T2>(serviceIdentifier: interfaces.ServiceIdentifier<T2>): interfaces.BindingWhenOnSyntax<T> {
-            this._binding.type = BindingType.Factory;
+            this._binding.type = BindingTypeEnum.Factory;
             this._binding.factory = (context) => {
-                return () => {
-                    return context.kernel.get<T2>(serviceIdentifier);
-                };
+                const autofactory = () => context.container.get<T2>(serviceIdentifier);
+                return autofactory;
             };
+            this._binding.scope = BindingScopeEnum.Singleton;
             return new BindingWhenOnSyntax<T>(this._binding);
         }
 
         public toProvider<T2>(provider: interfaces.ProviderCreator<T2>): interfaces.BindingWhenOnSyntax<T> {
-            this._binding.type = BindingType.Provider;
-            this._binding.provider = <any>provider;
+            this._binding.type = BindingTypeEnum.Provider;
+            this._binding.provider = provider;
+            this._binding.scope = BindingScopeEnum.Singleton;
             return new BindingWhenOnSyntax<T>(this._binding);
+        }
+
+        public toService(service: string | symbol | interfaces.Newable<T> | interfaces.Abstract<T>): void {
+            this.toDynamicValue(
+                (context) => context.container.get<T>(service)
+            );
         }
 
     }

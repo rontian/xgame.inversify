@@ -1,17 +1,18 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+namespace inversify {
+
     export function tagParameter(
         annotationTarget: any,
         propertyName: string,
         parameterIndex: number,
         metadata: interfaces.Metadata
     ) {
-        let metadataKey = TAGGED;
-        return _tagParameterOrProperty(metadataKey, annotationTarget, propertyName, metadata, parameterIndex);
+        const metadataKey = TAGGED;
+        _tagParameterOrProperty(metadataKey, annotationTarget, propertyName, metadata, parameterIndex);
     }
 
     export function tagProperty(
@@ -19,8 +20,8 @@ namespace ioc {
         propertyName: string,
         metadata: interfaces.Metadata
     ) {
-        let metadataKey = TAGGED_PROP;
-        return _tagParameterOrProperty(metadataKey, annotationTarget.constructor, propertyName, metadata);
+        const metadataKey = TAGGED_PROP;
+        _tagParameterOrProperty(metadataKey, annotationTarget.constructor, propertyName, metadata);
     }
 
     function _tagParameterOrProperty(
@@ -32,28 +33,28 @@ namespace ioc {
     ) {
 
         let paramsOrPropertiesMetadata: interfaces.ReflectResult = {};
-        let isParameterDecorator = (typeof parameterIndex === "number");
-        let key: string = (parameterIndex !== undefined && isParameterDecorator) ? parameterIndex.toString() : propertyName;
+        const isParameterDecorator = (typeof parameterIndex === "number");
+        const key: string = (parameterIndex !== undefined && isParameterDecorator) ? parameterIndex.toString() : propertyName;
 
-        // If the decorator is used as a parameter decorator property name must be provided
-        if (isParameterDecorator === true && propertyName !== undefined) {
+        // if the decorator is used as a parameter decorator, the property name must be provided
+        if (isParameterDecorator && propertyName !== undefined) {
             throw new Error(INVALID_DECORATOR_OPERATION);
         }
 
-        // read metadata if avalible
-        if (Reflect.hasOwnMetadata(metadataKey, annotationTarget) === true) {
+        // read metadata if available
+        if (Reflect.hasOwnMetadata(metadataKey, annotationTarget)) {
             paramsOrPropertiesMetadata = Reflect.getMetadata(metadataKey, annotationTarget);
         }
 
         // get metadata for the decorated parameter by its index
         let paramOrPropertyMetadata: interfaces.Metadata[] = paramsOrPropertiesMetadata[key];
-        if (Array.isArray(paramOrPropertyMetadata) !== true) {
+
+        if (!Array.isArray(paramOrPropertyMetadata)) {
             paramOrPropertyMetadata = [];
         } else {
-            for (let i = 0; i < paramOrPropertyMetadata.length; i++) {
-                let m: interfaces.Metadata = paramOrPropertyMetadata[i];
+            for (const m of paramOrPropertyMetadata) {
                 if (m.key === metadata.key) {
-                    throw new Error(`${DUPLICATED_METADATA} ${m.key}`);
+                    throw new Error(`${DUPLICATED_METADATA} ${m.key.toString()}`);
                 }
             }
         }
@@ -62,7 +63,6 @@ namespace ioc {
         paramOrPropertyMetadata.push(metadata);
         paramsOrPropertiesMetadata[key] = paramOrPropertyMetadata;
         Reflect.defineMetadata(metadataKey, paramsOrPropertiesMetadata, annotationTarget);
-        return annotationTarget;
 
     }
 
@@ -80,14 +80,17 @@ namespace ioc {
     // decorate(named("foo"), FooBar, 0);
     // decorate(tagged("bar"), FooBar, 1);
     export function decorate(
-        decorator: (ClassDecorator | ParameterDecorator),
+        decorator: (ClassDecorator | ParameterDecorator | MethodDecorator),
         target: any,
-        parameterIndex?: number): void {
+        parameterIndex?: number | string): void {
 
         if (typeof parameterIndex === "number") {
-            _decorate([_param(parameterIndex, <ParameterDecorator>decorator)], target);
+            _decorate([_param(parameterIndex, decorator as ParameterDecorator)], target);
+        } else if (typeof parameterIndex === "string") {
+            Reflect.decorate([decorator as MethodDecorator], target, parameterIndex);
         } else {
-            _decorate([<ClassDecorator>decorator], target);
+            _decorate([decorator as ClassDecorator], target);
         }
     }
+
 }

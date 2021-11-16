@@ -1,14 +1,44 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+/// <reference path="../utils/Map.ts" />
+
+namespace inversify {
     export namespace interfaces {
 
-        export interface Newable<T> {
-            new(...args: any[]): T;
+        export type BindingScope = "Singleton" | "Transient" | "Request";
+
+        export type BindingType = "ConstantValue" | "Constructor" | "DynamicValue" | "Factory" |
+            "Function" | "Instance" | "Invalid" | "Provider";
+
+        export type TargetType = "ConstructorArgument" | "ClassProperty" | "Variable";
+
+        export interface BindingScopeEnum {
+            Request: interfaces.BindingScope;
+            Singleton: interfaces.BindingScope;
+            Transient: interfaces.BindingScope;
         }
+
+        export interface BindingTypeEnum {
+            ConstantValue: interfaces.BindingType;
+            Constructor: interfaces.BindingType;
+            DynamicValue: interfaces.BindingType;
+            Factory: interfaces.BindingType;
+            Function: interfaces.BindingType;
+            Instance: interfaces.BindingType;
+            Invalid: interfaces.BindingType;
+            Provider: interfaces.BindingType;
+        }
+
+        export interface TargetTypeEnum {
+            ConstructorArgument: interfaces.TargetType;
+            ClassProperty: interfaces.TargetType;
+            Variable: interfaces.TargetType;
+        }
+
+        export type Newable<T> = new (...args: any[]) => T;
 
         export interface Abstract<T> {
             prototype: T;
@@ -16,58 +46,57 @@ namespace ioc {
 
         export type ServiceIdentifier<T> = (string | symbol | Newable<T> | Abstract<T>);
 
+        export interface Clonable<T> {
+            clone(): T;
+        }
+
         export interface Binding<T> extends Clonable<Binding<T>> {
-            guid: string;
+            id: number;
             moduleId: string;
             activated: boolean;
             serviceIdentifier: ServiceIdentifier<T>;
-            implementationType: Newable<T>;
-            factory: FactoryCreator<any>;
-            provider: ProviderCreator<any>;
             constraint: ConstraintFunction;
-            onActivation: (context: Context, injectable: T) => T;
-            cache: T;
-            dynamicValue: (context: Context) => T;
-            scope: number; // BindingScope
-            type: number; // BindingType
+            dynamicValue: ((context: interfaces.Context) => T) | null;
+            scope: BindingScope;
+            type: BindingType;
+            implementationType: Newable<T> | null;
+            factory: FactoryCreator<any> | null;
+            provider: ProviderCreator<any> | null;
+            onActivation: ((context: interfaces.Context, injectable: T) => T) | null;
+            cache: T | null;
         }
 
-        export interface Factory<T> extends Function {
-            (...args: any[]): (((...args: any[]) => T) | T);
+        export type Factory<T> = (...args: any[]) => (((...args: any[]) => T) | T);
+
+        export type FactoryCreator<T> = (context: Context) => Factory<T>;
+
+        export type Provider<T> = (...args: any[]) => (((...args: any[]) => Promise<T>) | Promise<T>);
+
+        export type ProviderCreator<T> = (context: Context) => Provider<T>;
+
+        export interface NextArgs {
+            avoidConstraints: boolean;
+            contextInterceptor: ((contexts: Context) => Context);
+            isMultiInject: boolean;
+            targetType: TargetType;
+            serviceIdentifier: interfaces.ServiceIdentifier<any>;
+            key?: string | number | symbol;
+            value?: any;
         }
 
-        export interface FactoryCreator<T> extends Function {
-            (context: Context): Factory<T>;
-        }
+        export type Next = (args: NextArgs) => (any | any[]);
 
-        export interface Provider<T> extends Function {
-            (): Promise<T>;
-        }
+        export type Middleware = (next: Next) => Next;
 
-        export interface ProviderCreator<T> extends Function {
-            (context: Context): Provider<T>;
-        }
-
-        export interface PlanAndResolve<T> {
-            (args: PlanAndResolveArgs): T[];
-        }
-
-        export interface PlanAndResolveArgs {
-            multiInject: boolean;
-            serviceIdentifier: ServiceIdentifier<any>;
-            target: Target;
-            contextInterceptor: (contexts: Context) => Context;
-        }
-
-        export interface Middleware extends Function {
-            (next: PlanAndResolve<any>): PlanAndResolve<any>;
-        }
+        export type ContextInterceptor = (context: interfaces.Context) => interfaces.Context;
 
         export interface Context {
-            guid: string;
-            kernel: Kernel;
+            id: number;
+            container: Container;
             plan: Plan;
+            currentRequest: Request;
             addPlan(plan: Plan): void;
+            setCurrentRequest(request: Request): void;
         }
 
         export interface ReflectResult {
@@ -75,20 +104,13 @@ namespace ioc {
         }
 
         export interface Metadata {
-            key: string;
+            key: string | number | symbol;
             value: any;
         }
 
         export interface Plan {
             parentContext: Context;
             rootRequest: Request;
-        }
-
-        export interface Planner {
-            createContext(kernel: Kernel): Context;
-            createPlan(parentContext: Context, binding: Binding<any>, target: Target): Plan;
-            getBindings<T>(kernel: Kernel, serviceIdentifier: ServiceIdentifier<T>): Binding<T>[];
-            getActiveBindings(parentRequest: Request, target: Target): Binding<any>[];
         }
 
         export interface QueryableString {
@@ -99,14 +121,21 @@ namespace ioc {
             value(): string;
         }
 
+        export type ResolveRequestHandler = (
+            request: interfaces.Request
+        ) => any;
+
+        export type RequestScope = Map<any, any> | null;
+
         export interface Request {
-            guid: string;
+            id: number;
             serviceIdentifier: ServiceIdentifier<any>;
             parentContext: Context;
-            parentRequest: Request;
+            parentRequest: Request | null;
             childRequests: Request[];
             target: Target;
             bindings: Binding<any>[];
+            requestScope: RequestScope;
             addChildRequest(
                 serviceIdentifier: ServiceIdentifier<any>,
                 bindings: (Binding<any> | Binding<any>[]),
@@ -115,88 +144,139 @@ namespace ioc {
         }
 
         export interface Target {
-            guid: string;
+            id: number;
             serviceIdentifier: ServiceIdentifier<any>;
-            type: number; // TargetType
+            type: TargetType;
             name: QueryableString;
-            metadata: Array<Metadata>;
-            hasTag(key: string): boolean;
+            metadata: Metadata[];
+            getNamedTag(): interfaces.Metadata | null;
+            getCustomTags(): interfaces.Metadata[] | null;
+            hasTag(key: string | number | symbol): boolean;
             isArray(): boolean;
             matchesArray(name: interfaces.ServiceIdentifier<any>): boolean;
             isNamed(): boolean;
             isTagged(): boolean;
+            isOptional(): boolean;
             matchesNamedTag(name: string): boolean;
-            matchesTag(key: string): (value: any) => boolean;
+            matchesTag(key: string | number | symbol): (value: any) => boolean;
         }
 
-        export interface Resolver {
-            resolve<T>(context: Context): T;
+        export interface ContainerOptions {
+            autoBindInjectable?: boolean;
+            defaultScope?: BindingScope;
+            skipBaseClassChecks?: boolean;
         }
 
-        export interface Kernel {
-            guid: string;
-            parent: Kernel;
+        export interface Container {
+            id: number;
+            parent: Container | null;
+            options: ContainerOptions;
             bind<T>(serviceIdentifier: ServiceIdentifier<T>): BindingToSyntax<T>;
+            rebind<T>(serviceIdentifier: interfaces.ServiceIdentifier<T>): interfaces.BindingToSyntax<T>;
             unbind(serviceIdentifier: ServiceIdentifier<any>): void;
             unbindAll(): void;
             isBound(serviceIdentifier: ServiceIdentifier<any>): boolean;
+            isBoundNamed(serviceIdentifier: ServiceIdentifier<any>, named: string | number | symbol): boolean;
+            isBoundTagged(serviceIdentifier: ServiceIdentifier<any>, key: string | number | symbol, value: any): boolean;
             get<T>(serviceIdentifier: ServiceIdentifier<T>): T;
-            getNamed<T>(serviceIdentifier: ServiceIdentifier<T>, named: string): T;
-            getTagged<T>(serviceIdentifier: ServiceIdentifier<T>, key: string, value: any): T;
+            getNamed<T>(serviceIdentifier: ServiceIdentifier<T>, named: string | number | symbol): T;
+            getTagged<T>(serviceIdentifier: ServiceIdentifier<T>, key: string | number | symbol, value: any): T;
             getAll<T>(serviceIdentifier: ServiceIdentifier<T>): T[];
-            load(...modules: KernelModule[]): void;
-            unload(...modules: KernelModule[]): void;
+            getAllTagged<T>(serviceIdentifier: ServiceIdentifier<T>, key: string | number | symbol, value: any): T[];
+            getAllNamed<T>(serviceIdentifier: ServiceIdentifier<T>, named: string | number | symbol): T[];
+            resolve<T>(constructorFunction: interfaces.Newable<T>): T;
+            load(...modules: ContainerModule[]): void;
+            loadAsync(...modules: AsyncContainerModule[]): Promise<void>;
+            unload(...modules: ContainerModule[]): void;
+            applyCustomMetadataReader(metadataReader: MetadataReader): void;
             applyMiddleware(...middleware: Middleware[]): void;
-            getServiceIdentifierAsString(serviceIdentifier: ServiceIdentifier<any>): string;
             snapshot(): void;
             restore(): void;
+            createChild(): Container;
         }
 
-        export interface Bind extends Function {
-            <T>(serviceIdentifier: ServiceIdentifier<T>): BindingToSyntax<T>;
+        export type Bind = <T>(serviceIdentifier: ServiceIdentifier<T>) => BindingToSyntax<T>;
+
+        export type Rebind = <T>(serviceIdentifier: ServiceIdentifier<T>) => BindingToSyntax<T>;
+
+        export type Unbind = <T>(serviceIdentifier: ServiceIdentifier<T>) => void;
+
+        export type IsBound = <T>(serviceIdentifier: ServiceIdentifier<T>) => boolean;
+
+        export interface ContainerModule {
+            id: number;
+            registry: ContainerModuleCallBack;
         }
 
-        export interface KernelModule {
-            guid: string;
-            registry: (bind: Bind) => void;
+        export interface AsyncContainerModule {
+            id: number;
+            registry: AsyncContainerModuleCallBack;
         }
 
-        export interface KernelSnapshot {
+        export type ContainerModuleCallBack = (
+            bind: interfaces.Bind,
+            unbind: interfaces.Unbind,
+            isBound: interfaces.IsBound,
+            rebind: interfaces.Rebind
+        ) => void;
+
+        export type AsyncContainerModuleCallBack = (
+            bind: interfaces.Bind,
+            unbind: interfaces.Unbind,
+            isBound: interfaces.IsBound,
+            rebind: interfaces.Rebind
+        ) => Promise<void>;
+
+        export interface ContainerSnapshot {
             bindings: Lookup<Binding<any>>;
-            middleware: PlanAndResolve<any>;
-        }
-
-        export interface Clonable<T> {
-            clone(): T;
+            middleware: Next | null;
         }
 
         export interface Lookup<T> extends Clonable<Lookup<T>> {
             add(serviceIdentifier: ServiceIdentifier<any>, value: T): void;
-            get(serviceIdentifier: ServiceIdentifier<any>): Array<T>;
-            remove(serviceIdentifier: ServiceIdentifier<any>): void;
-            removeByModuleId(moduleId: string): void;
+            getMap(): Map<interfaces.ServiceIdentifier<any>, T[]>;
+            get(serviceIdentifier: ServiceIdentifier<any>): T[];
+            remove(serviceIdentifier: interfaces.ServiceIdentifier<any>): void;
+            removeByCondition(condition: (item: T) => boolean): void;
             hasKey(serviceIdentifier: ServiceIdentifier<any>): boolean;
+            clone(): Lookup<T>;
+            traverse(func: (key: interfaces.ServiceIdentifier<any>, value: T[]) => void): void;
         }
-
-        export interface KeyValuePair<T> {
-            serviceIdentifier: ServiceIdentifier<any>;
-            value: Array<T>;
-            guid: string;
-        }
-
-        export interface BindingInSyntax<T> {
-            inSingletonScope(): BindingWhenOnSyntax<T>;
-            inTransientScope(): BindingWhenOnSyntax<T>;
-        }
-
-        export interface BindingInWhenOnSyntax<T> extends BindingInSyntax<T>, BindingWhenOnSyntax<T> { }
 
         export interface BindingOnSyntax<T> {
             onActivation(fn: (context: Context, injectable: T) => T): BindingWhenSyntax<T>;
         }
 
+        export interface BindingWhenSyntax<T> {
+            when(constraint: (request: Request) => boolean): BindingOnSyntax<T>;
+            whenTargetNamed(name: string | number | symbol): BindingOnSyntax<T>;
+            whenTargetIsDefault(): BindingOnSyntax<T>;
+            whenTargetTagged(tag: string | number | symbol, value: any): BindingOnSyntax<T>;
+            whenInjectedInto(parent: (Function | string)): BindingOnSyntax<T>;
+            whenParentNamed(name: string | number | symbol): BindingOnSyntax<T>;
+            whenParentTagged(tag: string | number | symbol, value: any): BindingOnSyntax<T>;
+            whenAnyAncestorIs(ancestor: (Function | string)): BindingOnSyntax<T>;
+            whenNoAncestorIs(ancestor: (Function | string)): BindingOnSyntax<T>;
+            whenAnyAncestorNamed(name: string | number | symbol): BindingOnSyntax<T>;
+            whenAnyAncestorTagged(tag: string | number | symbol, value: any): BindingOnSyntax<T>;
+            whenNoAncestorNamed(name: string | number | symbol): BindingOnSyntax<T>;
+            whenNoAncestorTagged(tag: string | number | symbol, value: any): BindingOnSyntax<T>;
+            whenAnyAncestorMatches(constraint: (request: Request) => boolean): BindingOnSyntax<T>;
+            whenNoAncestorMatches(constraint: (request: Request) => boolean): BindingOnSyntax<T>;
+        }
+
+        export interface BindingWhenOnSyntax<T> extends BindingWhenSyntax<T>, BindingOnSyntax<T> { }
+
+        export interface BindingInSyntax<T> {
+            inSingletonScope(): BindingWhenOnSyntax<T>;
+            inTransientScope(): BindingWhenOnSyntax<T>;
+            inRequestScope(): BindingWhenOnSyntax<T>;
+        }
+
+        export interface BindingInWhenOnSyntax<T> extends BindingInSyntax<T>, BindingWhenOnSyntax<T> { }
+
         export interface BindingToSyntax<T> {
-            to(constructor: { new(...args: any[]): T; }): BindingInWhenOnSyntax<T>;
+            to(constructor: new (...args: any[]) => T): BindingInWhenOnSyntax<T>;
             toSelf(): BindingInWhenOnSyntax<T>;
             toConstantValue(value: T): BindingWhenOnSyntax<T>;
             toDynamicValue(func: (context: Context) => T): BindingInWhenOnSyntax<T>;
@@ -205,31 +285,28 @@ namespace ioc {
             toFunction(func: T): BindingWhenOnSyntax<T>;
             toAutoFactory<T2>(serviceIdentifier: ServiceIdentifier<T2>): BindingWhenOnSyntax<T>;
             toProvider<T2>(provider: ProviderCreator<T2>): BindingWhenOnSyntax<T>;
-        }
-
-        export interface BindingWhenOnSyntax<T> extends BindingWhenSyntax<T>, BindingOnSyntax<T> { }
-
-        export interface BindingWhenSyntax<T> {
-            when(constraint: (request: Request) => boolean): BindingOnSyntax<T>;
-            whenTargetNamed(name: string): BindingOnSyntax<T>;
-            whenTargetTagged(tag: string, value: any): BindingOnSyntax<T>;
-            whenInjectedInto(parent: (Function | string)): BindingOnSyntax<T>;
-            whenParentNamed(name: string): BindingOnSyntax<T>;
-            whenParentTagged(tag: string, value: any): BindingOnSyntax<T>;
-            whenAnyAncestorIs(ancestor: (Function | string)): BindingOnSyntax<T>;
-            whenNoAncestorIs(ancestor: (Function | string)): BindingOnSyntax<T>;
-            whenAnyAncestorNamed(name: string): BindingOnSyntax<T>;
-            whenAnyAncestorTagged(tag: string, value: any): BindingOnSyntax<T>;
-            whenNoAncestorNamed(name: string): BindingOnSyntax<T>;
-            whenNoAncestorTagged(tag: string, value: any): BindingOnSyntax<T>;
-            whenAnyAncestorMatches(constraint: (request: Request) => boolean): BindingOnSyntax<T>;
-            whenNoAncestorMatches(constraint: (request: Request) => boolean): BindingOnSyntax<T>;
+            toService(service: ServiceIdentifier<T>): void;
         }
 
         export interface ConstraintFunction extends Function {
-            (request: Request): boolean;
             metaData?: Metadata;
+            (request: Request | null): boolean;
         }
+
+        export interface MetadataReader {
+            getConstructorMetadata(constructorFunc: Function): ConstructorMetadata;
+            getPropertiesMetadata(constructorFunc: Function): MetadataMap;
+        }
+
+        export interface MetadataMap {
+            [propertyNameOrArgumentIndex: string]: Metadata[];
+        }
+
+        export interface ConstructorMetadata {
+            compilerGeneratedMetadata: Function[] | undefined;
+            userGeneratedMetadata: MetadataMap;
+        }
+
     }
 
 }

@@ -1,95 +1,114 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+namespace inversify {
 
-    export class Resolver implements interfaces.Resolver {
+    type FactoryType = "toDynamicValue" | "toFactory" | "toAutoFactory" | "toProvider";
 
-        public resolve<T>(context: interfaces.Context): T {
-            let rootRequest = context.plan.rootRequest;
-            return this._resolve(rootRequest);
+    const invokeFactory = (
+        factoryType: FactoryType,
+        serviceIdentifier: interfaces.ServiceIdentifier<any>,
+        fn: () => any
+    ) => {
+        try {
+            return fn();
+        } catch (error) {
+            if (isStackOverflowExeption(error)) {
+                throw new Error(
+                    CIRCULAR_DEPENDENCY_IN_FACTORY(factoryType, serviceIdentifier.toString())
+                );
+            } else {
+                throw error;
+            }
         }
+    };
 
-        private _resolve(request: interfaces.Request): any {
+    const _resolveRequest = (requestScope: interfaces.RequestScope) =>
+        (request: interfaces.Request): any => {
 
-            let bindings = request.bindings;
-            let childRequests = request.childRequests;
+            request.parentContext.setCurrentRequest(request);
 
-            if (
-                request.target && request.target.isArray() &&
-                (!request.parentRequest.target || !request.parentRequest.target.matchesArray(request.target.serviceIdentifier))
-            ) {
+            const bindings = request.bindings;
+            const childRequests = request.childRequests;
+
+            const targetIsAnArray = request.target && request.target.isArray();
+
+            const targetParentIsNotAnArray = !request.parentRequest ||
+                !request.parentRequest.target ||
+                !request.target ||
+                !request.parentRequest.target.matchesArray(request.target.serviceIdentifier);
+
+            if (targetIsAnArray && targetParentIsNotAnArray) {
 
                 // Create an array instead of creating an instance
-                return childRequests.map((childRequest: interfaces.Request) => { return this._resolve(childRequest); });
+                return childRequests.map((childRequest: interfaces.Request) => {
+                    const _f = _resolveRequest(requestScope);
+                    return _f(childRequest);
+                });
 
             } else {
 
                 let result: any = null;
-                let binding = bindings[0];
-                let isSingleton = binding.scope === BindingScope.Singleton;
 
-                if (isSingleton && binding.activated === true) {
+                if (request.target.isOptional() && bindings.length === 0) {
+                    return undefined;
+                }
+
+                const binding = bindings[0];
+                const isSingleton = binding.scope === BindingScopeEnum.Singleton;
+                const isRequestSingleton = binding.scope === BindingScopeEnum.Request;
+
+                if (isSingleton && binding.activated) {
                     return binding.cache;
                 }
 
-                switch (binding.type) {
+                if (
+                    isRequestSingleton &&
+                    requestScope !== null &&
+                    requestScope.has(binding.id)
+                ) {
+                    return requestScope.get(binding.id);
+                }
 
-                    case BindingType.ConstantValue:
-                        result = binding.cache;
-                        break;
-
-                    case BindingType.DynamicValue:
-                        result = binding.dynamicValue(request.parentContext);
-                        break;
-
-                    case BindingType.Constructor:
-                        result = binding.implementationType;
-                        break;
-
-                    case BindingType.Factory:
-                        result = binding.factory(request.parentContext);
-                        break;
-
-                    case BindingType.Function:
-                        result = binding.cache;
-                        break;
-
-                    case BindingType.Provider:
-                        result = binding.provider(request.parentContext);
-                        break;
-
-                    case BindingType.Instance:
-
-                        let constr = binding.implementationType;
-
-                        if (childRequests.length > 0) {
-
-                            let constructorInjectionsRequests = childRequests.filter((childRequest: interfaces.Request) => {
-                                return childRequest.target.type === TargetType.ConstructorArgument;
-                            });
-
-                            let constructorInjections = constructorInjectionsRequests.map((childRequest: interfaces.Request) => {
-                                return this._resolve(childRequest);
-                            });
-
-                            result = this._createInstance(constr, constructorInjections);
-                            result = this._injectProperties(result, childRequests);
-
-                        } else {
-                            result = new constr();
-                        }
-
-                        break;
-
-                    case BindingType.Invalid:
-                    default:
-                        // The user probably created a binding but didn't finish it
-                        // e.g. kernel.bind<T>("Something"); missing BindingToSyntax
-                        let serviceIdentifier = request.parentContext.kernel.getServiceIdentifierAsString(request.serviceIdentifier);
-                        throw new Error(`${INVALID_BINDING_TYPE} ${serviceIdentifier}`);
+                if (binding.type === BindingTypeEnum.ConstantValue) {
+                    result = binding.cache;
+                    binding.activated = true;
+                } else if (binding.type === BindingTypeEnum.Function) {
+                    result = binding.cache;
+                    binding.activated = true;
+                } else if (binding.type === BindingTypeEnum.Constructor) {
+                    result = binding.implementationType;
+                } else if (binding.type === BindingTypeEnum.DynamicValue && binding.dynamicValue !== null) {
+                    result = invokeFactory(
+                        "toDynamicValue",
+                        binding.serviceIdentifier,
+                        () => (binding.dynamicValue as (context: interfaces.Context) => any)(request.parentContext)
+                    );
+                } else if (binding.type === BindingTypeEnum.Factory && binding.factory !== null) {
+                    result = invokeFactory(
+                        "toFactory",
+                        binding.serviceIdentifier,
+                        () => (binding.factory as interfaces.FactoryCreator<any>)(request.parentContext)
+                    );
+                } else if (binding.type === BindingTypeEnum.Provider && binding.provider !== null) {
+                    result = invokeFactory(
+                        "toProvider",
+                        binding.serviceIdentifier,
+                        () => (binding.provider as interfaces.Provider<any>)(request.parentContext)
+                    );
+                } else if (binding.type === BindingTypeEnum.Instance && binding.implementationType !== null) {
+                    result = resolveInstance(
+                        binding.implementationType,
+                        childRequests,
+                        _resolveRequest(requestScope)
+                    );
+                } else {
+                    // The user probably created a binding but didn't finish it
+                    // e.g. container.bind<T>("Something"); missing BindingToSyntax
+                    const serviceIdentifier = getServiceIdentifierAsString(request.serviceIdentifier);
+                    throw new Error(`${INVALID_BINDING_TYPE} ${serviceIdentifier}`);
                 }
 
                 // use activation handler if available
@@ -103,34 +122,21 @@ namespace ioc {
                     binding.activated = true;
                 }
 
+                if (
+                    isRequestSingleton &&
+                    requestScope !== null &&
+                    !requestScope.has(binding.id)
+                ) {
+                    requestScope.set(binding.id, result);
+                }
+
                 return result;
             }
 
-        }
+        };
 
-        private _injectProperties(instance: any, childRequests: interfaces.Request[]) {
-
-            let propertyInjectionsRequests = childRequests.filter((childRequest: interfaces.Request) => {
-                return childRequest.target.type === TargetType.ClassProperty;
-            });
-
-            let propertyInjections = propertyInjectionsRequests.map((childRequest: interfaces.Request) => {
-                return this._resolve(childRequest);
-            });
-
-            propertyInjectionsRequests.forEach((r: interfaces.Request, index: number) => {
-                let injection = propertyInjections[index];
-                instance[r.target.name.value()] = injection;
-            });
-
-            return instance;
-
-        }
-
-        private _createInstance(Func: { new(...args: any[]): any }, injections: Object[]) {
-            return new Func(...injections);
-        }
-
+    export function resolve<T>(context: interfaces.Context): T {
+        const _f = _resolveRequest(context.plan.rootRequest.requestScope);
+        return _f(context.plan.rootRequest);
     }
-
 }

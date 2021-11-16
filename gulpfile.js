@@ -11,8 +11,8 @@ gulp.task('buildJs', () => {
     return tsProject.src()
         .pipe(tsProject())
         .js
-        .pipe(inject.replace('var ioc;', ''))
-        .pipe(inject.prepend('window.ioc = {};\n'))
+        .pipe(inject.replace('var inversify;', ''))
+        .pipe(inject.prepend('window.inversify = {};\n'))
         .pipe(inject.replace('var __extends =', 'window.__extends ='))
         .pipe(minify({ ext: { min: ".min.js" } }))
         .pipe(gulp.dest('./bin'));
@@ -26,5 +26,13 @@ gulp.task("buildDts", ["buildJs"], () => {
 });
 
 gulp.task("build", ["buildDts"], () => {
+    return merge([
+        gulp.src('bin/**/*')
+            .pipe(gulp.dest('../client/libs/xgame.inversify/')),
+        gulp.src('bin/*.ts')
+            .pipe(gulp.dest('../xgame.core/libs')),
+        gulp.src('bin/*.ts')
+            .pipe(gulp.dest('../xgame.egret/libs'))
+    ]);
 });
 gulp.task('default', ['build'])

@@ -4,10 +4,11 @@
 /* @date   : 2021-11-16
 *************************************************/
 namespace inversify {
-    export function multiInject(serviceIdentifier: interfaces.ServiceIdentifier<any>) {
+
+    export function optional() {
         return function (target: any, targetKey: string, index?: number) {
 
-            const metadata = new Metadata(MULTI_INJECT_TAG, serviceIdentifier);
+            const metadata = new Metadata(OPTIONAL_TAG, true);
 
             if (typeof index === "number") {
                 tagParameter(target, targetKey, index, metadata);
@@ -17,4 +18,5 @@ namespace inversify {
 
         };
     }
+
 }

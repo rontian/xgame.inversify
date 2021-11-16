@@ -10,7 +10,7 @@
 		"declaration": true,
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": true,
-		"outFile": "./xgame.ioc.js"
+		"outFile": "./xgame.inversify.js"
 	},
 	"include": [
 		"src",

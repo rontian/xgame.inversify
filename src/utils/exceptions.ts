@@ -4,9 +4,11 @@
 /* @date   : 2021-11-16
 *************************************************/
 namespace inversify {
-    export const BindingCount = {
-        MultipleBindingsAvailable: 2,
-        NoBindingsAvailable: 0,
-        OnlyOneBindingAvailable: 1
-    };
+
+    export function isStackOverflowExeption(error: Error) {
+        return (
+            error instanceof RangeError ||
+            error.message === STACK_OVERFLOW
+        );
+    }
 }

@@ -1,31 +1,32 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+namespace inversify {
 
     export class Target implements interfaces.Target {
 
-        public guid: string;
-        public type: TargetType;
+        public id: number;
+        public type: interfaces.TargetType;
         public serviceIdentifier: interfaces.ServiceIdentifier<any>;
         public name: interfaces.QueryableString;
-        public metadata: Array<Metadata>;
+        public metadata: Metadata[];
 
-        constructor(
-            type: TargetType,
+        public constructor(
+            type: interfaces.TargetType,
             name: string,
             serviceIdentifier: interfaces.ServiceIdentifier<any>,
             namedOrTagged?: (string | Metadata)
         ) {
 
-            this.guid = guid();
+            this.id = id();
             this.type = type;
             this.serviceIdentifier = serviceIdentifier;
             this.name = new QueryableString(name || "");
             this.metadata = new Array<Metadata>();
-            let metadataItem: interfaces.Metadata = null;
+
+            let metadataItem: interfaces.Metadata | null = null;
 
             // is named target
             if (typeof namedOrTagged === "string") {
@@ -43,8 +44,7 @@ namespace ioc {
         }
 
         public hasTag(key: string): boolean {
-            for (let i = 0; i < this.metadata.length; i++) {
-                let m = this.metadata[i];
+            for (const m of this.metadata) {
                 if (m.key === key) {
                     return true;
                 }
@@ -65,13 +65,29 @@ namespace ioc {
         }
 
         public isTagged(): boolean {
-            if (this.metadata.length > 1) {
-                return true;
-            } else if (this.metadata.length === 1) {
-                // NAMED_TAG is not considered a tagged binding
-                return !this.hasTag(NAMED_TAG);
+            return this.metadata.some(
+                (metadata) => NON_CUSTOM_TAG_KEYS.every((key) => metadata.key !== key),
+            );
+        }
+
+        public isOptional(): boolean {
+            return this.matchesTag(OPTIONAL_TAG)(true);
+        }
+
+        public getNamedTag(): interfaces.Metadata | null {
+            if (this.isNamed()) {
+                return this.metadata.filter((m) => m.key === NAMED_TAG)[0];
+            }
+            return null;
+        }
+
+        public getCustomTags(): interfaces.Metadata[] | null {
+            if (this.isTagged()) {
+                return this.metadata.filter(
+                    (metadata) => NON_CUSTOM_TAG_KEYS.every((key) => metadata.key !== key),
+                );
             } else {
-                return false;
+                return null;
             }
         }
 
@@ -81,8 +97,7 @@ namespace ioc {
 
         public matchesTag(key: string) {
             return (value: any) => {
-                for (let i = 0; i < this.metadata.length; i++) {
-                    let m = this.metadata[i];
+                for (const m of this.metadata) {
                     if (m.key === key && m.value === value) {
                         return true;
                     }

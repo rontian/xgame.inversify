@@ -1,9 +1,9 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+namespace inversify {
 
     export class BindingWhenOnSyntax<T> implements interfaces.BindingWhenSyntax<T>, interfaces.BindingOnSyntax<T> {
 
@@ -23,6 +23,10 @@ namespace ioc {
 
         public whenTargetNamed(name: string): interfaces.BindingOnSyntax<T> {
             return this._bindingWhenSyntax.whenTargetNamed(name);
+        }
+
+        public whenTargetIsDefault(): interfaces.BindingOnSyntax<T> {
+            return this._bindingWhenSyntax.whenTargetIsDefault();
         }
 
         public whenTargetTagged(tag: string, value: any): interfaces.BindingOnSyntax<T> {

@@ -1,20 +1,20 @@
 /*************************************************
 /* @author : rontian
 /* @email  : i@ronpad.com
-/* @date   : 2021-11-15
+/* @date   : 2021-11-16
 *************************************************/
-namespace ioc {
+
+namespace inversify {
 
     // Used to add custom metadata which is used to resolve metadata-based contextual bindings.
-    export function tagged(metadataKey: string, metadataValue: any) {
+    export function tagged(metadataKey: string | number | symbol, metadataValue: any) {
         return function (target: any, targetKey: string, index?: number) {
-            let metadata = new Metadata(metadataKey, metadataValue);
+            const metadata = new Metadata(metadataKey, metadataValue);
             if (typeof index === "number") {
-                return tagParameter(target, targetKey, index, metadata);
+                tagParameter(target, targetKey, index, metadata);
             } else {
-                return tagProperty(target, targetKey, metadata);
+                tagProperty(target, targetKey, metadata);
             }
         };
     }
-
 }
